@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Solar System</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+        }
+        canvas {
+            display: block;
+        }
+        .info-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 14px;
+            text-shadow: 1px 1px 2px #000;
+            background-color: rgba(0, 0, 0, 0.4);
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .info-panel h1 {
+            font-size: 24px;
+            margin: 0 0 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="info-panel">
+        <h1>3D Solar System</h1>
+        <p>Use your mouse or touch gestures to rotate and zoom.</p>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script>
+        window.onload = function() {
+            // --- Scene Setup ---
+            const scene = new THREE.Scene();
+
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+            camera.position.z = 200;
+
+            const renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // Add orbit controls to allow user interaction
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+
+            // --- Backgrounds ---
+            const starGeometry = new THREE.BufferGeometry();
+            const starCount = 5000;
+            const starVertices = [];
+            for (let i = 0; i < starCount; i++) {
+                const x = THREE.MathUtils.randFloatSpread(1000);
+                const y = THREE.MathUtils.randFloatSpread(1000);
+                const z = THREE.MathUtils.randFloatSpread(1000);
+                starVertices.push(x, y, z);
+            }
+            starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+            const starMaterial = new THREE.PointsMaterial({
+                color: 0xffffff,
+                size: 1.5,
+                sizeAttenuation: true
+            });
+            const stars = new THREE.Points(starGeometry, starMaterial);
+            scene.add(stars);
+
+            const milkyWayGeometry = new THREE.SphereGeometry(1000, 64, 64);
+            const textureLoader = new THREE.TextureLoader();
+            const milkyWayTexture = textureLoader.load('https://www.esa.int/var/esa/storage/images/esa_multimedia/images/2025/01/the_best_milky_way_map_by_gaia_labelled/26532034-1-eng-GB/The_best_Milky_Way_map_by_Gaia_labelled_pillars.jpg');
+            const milkyWayMaterial = new THREE.MeshBasicMaterial({ map: milkyWayTexture, side: THREE.BackSide });
+            const milkyWay = new THREE.Mesh(milkyWayGeometry, milkyWayMaterial);
+            milkyWay.visible = false;
+            scene.add(milkyWay);
+
+            // --- Lighting ---
+            const sunLight = new THREE.PointLight(0xffffff, 2, 0, 2);
+            scene.add(sunLight);
+            const ambientLight = new THREE.AmbientLight(0x404040, 1);
+            scene.add(ambientLight);
+
+            // --- Objects ---
+            const sunGeometry = new THREE.SphereGeometry(15, 64, 64);
+            const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffe000 });
+            const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+            scene.add(sun);
+
+            // Add a glowing effect to the sun
+            const sunGlowGeometry = new THREE.SphereGeometry(18, 64, 64);
+            const sunGlowMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffffee,
+                transparent: true,
+                opacity: 0.5,
+                blending: THREE.AdditiveBlending
+            });
+            const sunGlow = new THREE.Mesh(sunGlowGeometry, sunGlowMaterial);
+            sun.add(sunGlow);
+
+            const planets = [
+                { name: 'Mercury', size: 1.5, color: 0x8b8b8b, distance: 30, speed: 0.047 },
+                { name: 'Venus', size: 2.8, color: 0xe6e6a8, distance: 50, speed: 0.035 },
+                { name: 'Earth', size: 3, color: 0x00aaff, distance: 70, speed: 0.0298 },
+                { name: 'Mars', size: 2, color: 0xff0000, distance: 90, speed: 0.024 },
+                { name: 'Jupiter', size: 10, color: 0xccb266, distance: 130, speed: 0.013 },
+                { name: 'Saturn', size: 8, color: 0xd9b38c, distance: 160, speed: 0.009 },
+                { name: 'Uranus', size: 6, color: 0xaaffff, distance: 190, speed: 0.0068 },
+                { name: 'Neptune', size: 5.5, color: 0x0000ff, distance: 220, speed: 0.0054 },
+            ];
+
+            const planetMeshes = [];
+
+            function createTextSprite(message) {
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                context.font = 'Bold 40px Arial';
+                const metrics = context.measureText(message);
+                const textWidth = metrics.width;
+                canvas.width = textWidth + 10;
+                canvas.height = 50;
+                context.font = 'Bold 40px Arial';
+                context.fillStyle = 'rgba(255, 255, 255, 1.0)';
+                context.fillText(message, 5, 40);
+                const texture = new THREE.CanvasTexture(canvas);
+                const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+                const sprite = new THREE.Sprite(spriteMaterial);
+                sprite.scale.set(canvas.width * 0.1, canvas.height * 0.1, 1);
+                return sprite;
+            }
+
+            planets.forEach(planetData => {
+                const planetGroup = new THREE.Group();
+                const planetGeometry = new THREE.SphereGeometry(planetData.size, 32, 32);
+                const planetMaterial = new THREE.MeshStandardMaterial({ color: planetData.color });
+                const planetMesh = new THREE.Mesh(planetGeometry, planetMaterial);
+                planetMesh.position.x = planetData.distance;
+
+                const orbitGeometry = new THREE.RingGeometry(planetData.distance - 0.5, planetData.distance + 0.5, 64);
+                const orbitMaterial = new THREE.MeshBasicMaterial({ color: 0xaaaaaa, side: THREE.DoubleSide });
+                const orbit = new THREE.Mesh(orbitGeometry, orbitMaterial);
+                orbit.rotation.x = Math.PI / 2;
+                planetGroup.add(orbit);
+
+                if (planetData.name === 'Saturn') {
+                    const ringGeometry = new THREE.RingGeometry(10, 15, 64);
+                    const ringMaterial = new THREE.MeshBasicMaterial({ color: 0x8c734d, side: THREE.DoubleSide });
+                    const ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
+                    ringMesh.rotation.x = Math.PI / 2;
+                    planetMesh.add(ringMesh);
+                }
+
+                planetGroup.add(planetMesh);
+
+                const planetLabel = createTextSprite(planetData.name);
+                planetLabel.position.x = planetData.distance;
+                planetLabel.position.y = planetData.size + 4;
+                planetGroup.add(planetLabel);
+
+                scene.add(planetGroup);
+                planetMeshes.push({ mesh: planetMesh, group: planetGroup, speed: planetData.speed, distance: planetData.distance });
+            });
+
+            // --- Animation Loop ---
+            const animate = function() {
+                requestAnimationFrame(animate);
+
+                sun.rotation.y += 0.001;
+
+                planetMeshes.forEach(planet => {
+                    planet.group.rotation.y += planet.speed * 0.1;
+                });
+
+                if (camera.position.length() > 500) {
+                    stars.visible = false;
+                    milkyWay.visible = true;
+                } else {
+                    stars.visible = true;
+                    milkyWay.visible = false;
+                }
+
+                controls.update();
+                renderer.render(scene, camera);
+            };
+
+            animate();
+
+            // --- Handle Window Resizing ---
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        };
+    </script>
+</body>
+</html>
